@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kepemilikan 5% — daily ownership changes</title>
+<style>
+  :root{
+    --bg:#E7ECEF; --surface:#FFFFFF; --surface-2:#F3F6F8;
+    --ink:#17222C; --muted:#5D6D7B; --faint:#8A9AA7;
+    --line:#CFD8DE; --line-soft:#E3E9ED;
+    --up:#0B6E5F; --up-soft:#D9EDE8;
+    --down:#A9333F; --down-soft:#F6DFE1;
+    --accent:#3D4E8F; --accent-soft:#E1E5F3;
+    --radius:6px;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  button{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  .wrap{max-width:1300px;margin:0 auto;padding:0 20px 80px}
+  header.top{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#F2F5F7,var(--bg));margin-bottom:22px}
+  .top-inner{max-width:1300px;margin:0 auto;padding:20px 20px 16px;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;justify-content:space-between}
+  h1{margin:0;font-size:20px;font-weight:650;letter-spacing:-.01em}
+  h1 span{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:2px}
+  .periods{display:flex;align-items:center;gap:8px}
+  .periods .arrow{color:var(--faint)}
+  select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink)}
+
+  .searchbar{position:relative;margin-bottom:18px}
+  .searchbar input{width:100%;font:inherit;font-size:15px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+  .searchbar input::placeholder{color:var(--faint)}
+  .results{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(23,34,44,.13);max-height:330px;overflow:auto}
+  .results[hidden]{display:none}
+  .res-group{padding:6px 12px 4px;font-size:11.5px;color:var(--faint);border-top:1px solid var(--line-soft)}
+  .res-group:first-child{border-top:0}
+  .res{display:flex;gap:10px;align-items:baseline;padding:7px 12px;cursor:pointer;border:0;background:none;width:100%;text-align:left}
+  .res:hover{background:var(--accent-soft)}
+  .res b{font-weight:600;min-width:62px}
+  .res span{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  nav.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:18px}
+  nav.tabs button{border:0;background:none;padding:9px 15px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:var(--radius) var(--radius) 0 0}
+  nav.tabs button:hover{color:var(--ink);background:var(--surface-2)}
+  nav.tabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .panel-head{padding:16px 18px;border-bottom:1px solid var(--line-soft)}
+  .panel-head h2{margin:0;font-size:17px;font-weight:620;letter-spacing:-.01em}
+  .panel-head .sub{color:var(--muted);font-size:13px;margin-top:3px}
+  .lede{font-size:15px;line-height:1.65;max-width:70ch;margin:0 0 18px}
+  .lede b{font-weight:640}
+  .lede .g{color:var(--up);font-weight:640}
+  .lede .r{color:var(--down);font-weight:640}
+
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;background:var(--surface-2);border-bottom:1px solid var(--line-soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface);max-width:100%;overflow-x:auto}
+  .seg button{border:0;background:none;padding:6px 12px;cursor:pointer;color:var(--muted);border-left:1px solid var(--line-soft);white-space:nowrap}
+  .seg button:first-child{border-left:0}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600}
+  .spacer{flex:1}
+  .ghost{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);padding:6px 12px;cursor:pointer;color:var(--muted)}
+  .ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .controls select{max-width:100%}
+  label.inline{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  thead th{position:sticky;top:0;background:var(--surface);z-index:2;font-weight:600;font-size:12.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  thead th.num{text-align:right}
+  thead th.sortable{cursor:pointer;user-select:none}
+  thead th.sortable:hover{color:var(--ink)}
+  thead th .caret{color:var(--accent);font-size:10px;margin-left:3px}
+  tbody tr.row:hover{background:var(--surface-2)}
+  tbody tr.open{background:var(--accent-soft)}
+  td.name{max-width:330px;min-width:180px}
+  .link{background:none;border:0;padding:0;cursor:pointer;color:var(--accent);text-align:left;font:inherit}
+  .link:hover{text-decoration:underline}
+  .ticker{font-weight:640}
+  .dim{color:var(--muted)} .up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--faint)}
+
+  .tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;line-height:1.6;white-space:nowrap}
+  .tag.in{background:var(--up-soft);color:var(--up)}
+  .tag.up{background:var(--up-soft);color:var(--up)}
+  .tag.out{background:var(--down-soft);color:var(--down)}
+  .tag.down{background:var(--down-soft);color:var(--down)}
+  .tag.shuffle{background:var(--accent-soft);color:var(--accent)}
+  .tag.f{background:#EAE4F2;color:#5B4682}
+  .tag.l{background:var(--surface-2);color:var(--muted)}
+  .bcode{display:inline-block;min-width:26px;text-align:center;padding:1px 5px;border-radius:3px;
+    font-size:11.5px;font-weight:650;letter-spacing:.03em;background:var(--accent);color:#fff}
+  .bcode.none{background:var(--surface-2);color:var(--faint);font-weight:500;letter-spacing:0}
+  td.bc{width:1%;white-space:nowrap}
+  .offset{color:var(--faint);cursor:help}
+  .recs{color:var(--accent);cursor:help;font-size:11.5px}
+
+  .disc{width:20px;color:var(--faint);cursor:pointer;background:none;border:0;padding:0;font-size:11px}
+  tr.detail td{background:var(--surface-2);padding:0}
+  .custwrap{padding:10px 18px 12px}
+  .custwrap h4{margin:0 0 6px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  table.cust{width:auto;min-width:min(620px,100%);font-size:13px}
+  table.cust td,table.cust th{padding:4px 14px 4px 0;border:0}
+  table.cust th{position:static;background:none;font-size:11.5px}
+
+  .stats{display:flex;flex-wrap:wrap;gap:26px;padding:14px 18px;border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+  .stat .k{font-size:12px;color:var(--muted)}
+  .stat .v{font-size:19px;font-weight:620;font-variant-numeric:tabular-nums}
+  .empty{padding:44px 18px;text-align:center;color:var(--muted)}
+  .empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+  .note{max-width:74ch;margin:22px 0 0;font-size:12.5px;line-height:1.7;color:var(--muted)}
+  .note b{color:var(--ink);font-weight:600}
+  @media (max-width:720px){td.name{max-width:150px;min-width:120px}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <h1>Kepemilikan 5%<span>Daily shareholder changes from KSEI SID ownership reports</span></h1>
+    <div class="periods">
+      <select id="from" aria-label="Compare from"></select>
+      <span class="arrow" aria-hidden="true">&rarr;</span>
+      <select id="to" aria-label="Compare to"></select>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="searchbar">
+    <input id="q" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Search an emiten (AADI, Adaro) or a 5% owner (Kimia Farma, Tree of Blessing)">
+    <div class="results" id="results" hidden></div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="changes" aria-selected="true">Changes</button>
+    <button role="tab" data-view="issuer" aria-selected="false">Emiten</button>
+    <button role="tab" data-view="owner" aria-selected="false">Owner</button>
+  </nav>
+
+  <div id="main"></div>
+
+  <p class="note">
+    <b>Reading the data.</b> KSEI publishes holders at or above 5% of an emiten, by SID, broken
+    down across the securities accounts they hold through. A holder tagged <i>crossed 5%</i> may
+    have held a smaller stake the day before, and one tagged <i>below 5%</i> may still hold shares.
+    Click any row to see which custodian actually moved &mdash; a stake can stay the same size and
+    still shift between brokers, which this tags <i>moved broker</i>.
+  </p>
+  <p class="note">
+    <b>Broker codes.</b> The two-letter code is IDX's identifier for an exchange member, the same
+    one you see in a broker summary. It only exists for exchange members: a stake held through a
+    custodian bank such as Deutsche Bank or Standard Chartered shows <i>bank</i>, and one parked in
+    a KSEI holding account for a broker whose membership was revoked shows <i>closed</i>. Codes are
+    matched from <code>brokers.csv</code>; anything the build cannot match is listed when it runs,
+    rather than quietly dropped.
+  </p>
+  <p class="note" id="carrynote"></p>
+  <p class="note">
+    <b>Why this rebuilds the comparison.</b> Each KSEI file already contains a before and after
+    column, but those columns are unreliable across a record change. When KSEI merged two duplicate
+    Kimia Farma records in PEHA on 2 Sep, its own file reported a jump from 238,450,930 to
+    476,901,860 &mdash; an apparent doubling of a 28% stake. Kimia Farma had in fact held 56.77%
+    on both days through two SIDs. This page therefore reconstructs a snapshot per date, folds
+    respellings of one holder together, and compares the snapshots itself.
+  </p>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   Data lives in csv/, not in this file. Two ways in:
+
+   1. Served over http -- the page fetches csv/ itself.
+   2. Opened straight off disk (file://) -- the browser blocks fetch, so
+      the page asks for the csv folder and reads it locally instead.
+      Nothing is uploaded anywhere; it is read in the browser.
+   ------------------------------------------------------------------ */
+let DATA = null, posByDate = [], accByDate = [], searchIndex = [];
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+      } else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const head = rows.shift().map(h => h.trim());
+  return rows.filter(r => r.length > 1)
+             .map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
+}
+
+function assemble(positions, accounts, meta) {
+  const issuers = new Map(), investors = new Map(), custodians = new Map();
+  const idx = (map, key, make) => {
+    if (!map.has(key)) map.set(key, { i: map.size, v: make() });
+    return map.get(key).i;
+  };
+  // KSEI writes L for lokal and A for asing. Not F.
+  const lfCode = v => v === 'L' ? 0 : v === 'A' ? 1 : 2;
+
+  const dates = [...new Set(positions.map(r => r.date))].sort();
+  const dateAt = Object.fromEntries(dates.map((d, i) => [d, i]));
+
+  const pos = dates.map(() => []), acc = dates.map(() => []);
+  for (const r of positions) {
+    const ii = idx(issuers, r.emiten, () => [r.emiten, r.issuer_name]);
+    const iv = idx(investors, r.investor, () => r.investor);
+    pos[dateAt[r.date]].push([ii, iv, +r.shares, Math.round(+r.pct * 100),
+                              +r.sid_records || 1, lfCode(r.local_foreign), r.domicile]);
+  }
+  for (const r of accounts) {
+    if (!issuers.has(r.emiten) || !investors.has(r.investor)) continue;
+    const ic = idx(custodians, r.custodian,
+                   () => [r.custodian, r.broker_code, r.custodian_type]);
+    acc[dateAt[r.date]].push([issuers.get(r.emiten).i, investors.get(r.investor).i,
+                              ic, +r.shares]);
+  }
+
+  const flat = map => [...map.values()].sort((a, b) => a.i - b.i).map(x => x.v);
+  return {
+    dates,
+    carried: (meta.carried || '').split('|').filter(Boolean),
+    issuers: flat(issuers), investors: flat(investors), custodians: flat(custodians),
+    positions: pos, accounts: acc
+  };
+}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nf = new Intl.NumberFormat('en-US');
+const shares = n => nf.format(n);
+const pct = bp => (bp / 100).toFixed(2) + '%';
+const pp = bp => (bp > 0 ? '+' : bp < 0 ? '\u2212' : '') + (Math.abs(bp) / 100).toFixed(2);
+const signed = n => (n > 0 ? '+' : n < 0 ? '\u2212' : '') + shares(Math.abs(n));
+const dateLabel = iso => {
+  const [y, m, d] = iso.split('-');
+  return `${+d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]} ${y}`;
+};
+const code = i => DATA.issuers[i][0];
+const iname = i => DATA.issuers[i][1];
+const owner = i => DATA.investors[i];
+const cust = i => DATA.custodians[i][0];
+const bcode = i => DATA.custodians[i][1];
+const bkind = i => DATA.custodians[i][2];   // 'custodian bank', 'closed member ...', etc.
+// A two-letter IDX code exists only for exchange members. Custodian banks and
+// KSEI's holding accounts for revoked members legitimately have none.
+const codeChip = i => bcode(i)
+  ? `<span class="bcode" title="IDX broker code">${esc(bcode(i))}</span>`
+  : `<span class="bcode none" title="${bkind(i) === 'bank' ? 'Custodian bank \u2014 not an exchange member, so no broker code'
+      : bkind(i) === 'closed' ? 'KSEI holding account for a broker whose exchange membership was revoked'
+      : 'Not in brokers.csv'}">${bkind(i) === 'bank' ? 'bank' : bkind(i) === 'closed' ? 'closed' : '\u2014'}</span>`;
+
+/* ---------------- indexes ---------------- */
+function buildIndexes() {
+  posByDate = DATA.positions.map(rows => {
+    const m = new Map();
+    for (const r of rows) m.set(r[0] + ':' + r[1], r);
+    return m;
+  });
+  accByDate = DATA.accounts.map(rows => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = r[0] + ':' + r[1];
+      if (!m.has(k)) m.set(k, new Map());
+      m.get(k).set(r[2], r[3]);
+    }
+    return m;
+  });
+  searchIndex = [];
+  DATA.issuers.forEach((x, i) => searchIndex.push(
+    { t: 'i', id: i, k: (x[0] + ' ' + x[1]).toUpperCase(), a: x[0], b: x[1] }));
+  DATA.investors.forEach((n, i) => searchIndex.push(
+    { t: 'o', id: i, k: n.toUpperCase(), a: '', b: n }));
+}
+
+const cache = new Map();
+function buildDiff(a, b) {
+  const key = a + '>' + b;
+  if (cache.has(key)) return cache.get(key);
+
+  const pa = posByDate[a], pb = posByDate[b];
+  const aa = accByDate[a], ab = accByDate[b];
+  const list = [];
+
+  for (const k of new Set([...pa.keys(), ...pb.keys()])) {
+    const ra = pa.get(k), rb = pb.get(k);
+    const ref = rb || ra;
+    const sa = ra ? ra[2] : 0, sb = rb ? rb[2] : 0;
+    const ba = ra ? ra[3] : 0, bb = rb ? rb[3] : 0;
+    const ca = aa.get(k) || new Map(), cb = ab.get(k) || new Map();
+
+    const moved = [];
+    for (const c of new Set([...ca.keys(), ...cb.keys()])) {
+      const va = ca.get(c) || 0, vb = cb.get(c) || 0;
+      if (va !== vb) moved.push({ c, va, vb });
+    }
+    if (sa === sb && !moved.length) continue;
+
+    moved.sort((x, y) => Math.abs(y.vb - y.va) - Math.abs(x.vb - x.va));
+    list.push({
+      iss: ref[0], inv: ref[1], lf: ref[5], dom: ref[6],
+      recA: ra ? ra[4] : 0, recB: rb ? rb[4] : 0,
+      sa, sb, ba, bb, ds: sb - sa, db: bb - ba,
+      dr: sa ? (sb - sa) / sa : null,
+      moved,
+      custA: ca, custB: cb,
+      status: !sa ? 'in' : !sb ? 'out' : sb > sa ? 'up' : sb < sa ? 'down' : 'shuffle'
+    });
+  }
+
+  // Same block leaving one holder and arriving at another inside one emiten.
+  // Matched with a small tolerance, because a transferred block often leaves an
+  // odd-lot account behind; only flagged when the pairing is unambiguous.
+  const tolerance = size => Math.max(1000, Math.floor(size / 10000));
+  const byIss = new Map();
+  for (const h of list) {
+    if (!byIss.has(h.iss)) byIss.set(h.iss, []);
+    byIss.get(h.iss).push(h);
+  }
+  for (const group of byIss.values()) {
+    const plus = group.filter(h => h.ds > 0).map(h => [h.ds, h]);
+    const minus = group.filter(h => h.ds < 0).map(h => [-h.ds, h]);
+    for (const [size, h] of plus) {
+      const tol = tolerance(size);
+      const near = minus.filter(m => Math.abs(m[0] - size) <= tol);
+      if (near.length !== 1) continue;
+      const rival = plus.filter(p => Math.abs(p[0] - near[0][0]) <= tol);
+      if (rival.length !== 1) continue;
+      h.offset = near[0][1].inv;
+      near[0][1].offset = h.inv;
+    }
+  }
+
+  const byIssuer = new Map(), byOwner = new Map();
+  for (const h of list) {
+    if (!byIssuer.has(h.iss)) byIssuer.set(h.iss, []);
+    byIssuer.get(h.iss).push(h);
+    if (!byOwner.has(h.inv)) byOwner.set(h.inv, []);
+    byOwner.get(h.inv).push(h);
+  }
+  const out = { list, byIssuer, byOwner };
+  cache.set(key, out);
+  return out;
+}
+
+/* ---------------- state ---------------- */
+const state = {
+  from: 0, to: 0,
+  view: 'changes', issuer: null, ownerId: null,
+  filter: 'all', sort: 'code', desc: false, open: new Set()
+};
+
+/* ---------------- pickers ---------------- */
+function initDates() {
+  for (const sel of [$('#from'), $('#to')]) {
+    sel.innerHTML = DATA.dates.map((d, i) => `<option value="${i}">${dateLabel(d)}</option>`).join('');
+  }
+  $('#from').value = state.from; $('#to').value = state.to;
+  $('#from').onchange = e => { state.from = +e.target.value; state.open.clear(); render(); };
+  $('#to').onchange = e => { state.to = +e.target.value; state.open.clear(); render(); };
+  if (DATA.carried && DATA.carried.length) {
+    $('#carrynote').innerHTML = `<b>One date is reconstructed.</b> `
+      + DATA.carried.map(dateLabel).join(', ')
+      + ` comes from the next day's file rather than its own, because no earlier file covers it. `
+      + `KSEI's before column only lists holders who still hold 5% the next day, so a holder who `
+      + `fell below 5% that day is missing from it. Add the file published on that date to fix it.`;
+  }
+}
+
+/* ---------------- search ---------------- */
+function runSearch(term) {
+  const box = $('#results');
+  const q = term.trim().toUpperCase();
+  if (q.length < 2) { box.hidden = true; return; }
+  const hits = [];
+  for (const it of searchIndex) {
+    const at = it.k.indexOf(q);
+    if (at >= 0) hits.push([at === 0 ? 0 : 1, it.k.length, it]);
+  }
+  hits.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  const em = hits.filter(h => h[2].t === 'i').slice(0, 6);
+  const ow = hits.filter(h => h[2].t === 'o').slice(0, 8);
+  if (!em.length && !ow.length) {
+    box.innerHTML = `<div class="res-group">Nothing matches &ldquo;${esc(term)}&rdquo;</div>`;
+    box.hidden = false; return;
+  }
+  let html = '';
+  if (em.length) html += '<div class="res-group">Emiten</div>' + em.map(h =>
+    `<button class="res" data-t="i" data-id="${h[2].id}"><b>${esc(h[2].a)}</b><span>${esc(h[2].b)}</span></button>`).join('');
+  if (ow.length) html += '<div class="res-group">Owners</div>' + ow.map(h =>
+    `<button class="res" data-t="o" data-id="${h[2].id}"><span>${esc(h[2].b)}</span></button>`).join('');
+  box.innerHTML = html; box.hidden = false;
+}
+
+function initSearch() {
+  const input = $('#q'), box = $('#results');
+  let t;
+  input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => runSearch(input.value), 110); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { box.hidden = true; input.blur(); }
+    if (e.key === 'Enter') { const f = box.querySelector('.res'); if (f && !box.hidden) f.click(); }
+  });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('.res'); if (!b) return;
+    box.hidden = true; input.value = '';
+    go(b.dataset.t === 'i' ? 'issuer' : 'owner', +b.dataset.id);
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.searchbar')) box.hidden = true; });
+}
+
+function go(view, id) {
+  state.view = view; state.sort = null; state.open.clear();
+  if (view === 'issuer') state.issuer = id;
+  if (view === 'owner') state.ownerId = id;
+  const hash = view === 'issuer' ? '#/emiten/' + code(id)
+             : view === 'owner' ? '#/owner/' + encodeURIComponent(owner(id)) : '#/changes';
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+  render();
+}
+function readHash() {
+  const m = decodeURIComponent(location.hash || '').match(/^#\/(emiten|owner)\/(.+)$/);
+  if (!m) return;
+  if (m[1] === 'emiten') {
+    const i = DATA.issuers.findIndex(x => x[0] === m[2].toUpperCase());
+    if (i >= 0) { state.view = 'issuer'; state.issuer = i; }
+  } else {
+    const i = DATA.investors.indexOf(m[2]);
+    if (i >= 0) { state.view = 'owner'; state.ownerId = i; }
+  }
+}
+
+/* ---------------- cells ---------------- */
+const statusTag = h => {
+  const label = { in: 'crossed 5%', out: 'below 5%', up: 'added', down: 'reduced', shuffle: 'moved broker' }[h.status];
+  const off = h.offset !== undefined
+    ? ` <span class="offset" title="Exactly offset by ${esc(owner(h.offset))} in the same emiten">\u21C4</span>` : '';
+  const rec = h.recB > 1 || h.recA > 1
+    ? ` <span class="recs" title="Held through ${Math.max(h.recA, h.recB)} separate SID records that KSEI lists under variants of this name">\u00D7${Math.max(h.recA, h.recB)}</span>` : '';
+  return `<span class="tag ${h.status}">${label}</span>${off}${rec}`;
+};
+const dShares = h => {
+  if (h.status === 'in') return `<span class="up">new ${shares(h.sb)}</span>`;
+  if (h.status === 'out') return `<span class="down">\u2212${shares(h.sa)}</span>`;
+  const c = h.ds > 0 ? 'up' : h.ds < 0 ? 'down' : 'zero';
+  return `<span class="${c}">${h.ds === 0 ? '\u2014' : signed(h.ds)}</span>`;
+};
+const dPp = h => {
+  const c = h.db > 0 ? 'up' : h.db < 0 ? 'down' : 'zero';
+  return `<span class="${c}">${h.db === 0 ? '\u2014' : pp(h.db)}</span>`;
+};
+const lfTag = v => v === 1 ? '<span class="tag f">Foreign</span>'
+  : v === 0 ? '<span class="tag l">Local</span>' : '<span class="tag l">\u2014</span>';
+
+function custodianDetail(h) {
+  const keys = [...new Set([...h.custA.keys(), ...h.custB.keys()])];
+  keys.sort((x, y) => {
+    const dx = Math.abs((h.custB.get(x) || 0) - (h.custA.get(x) || 0));
+    const dy = Math.abs((h.custB.get(y) || 0) - (h.custA.get(y) || 0));
+    return dy - dx || (h.custB.get(y) || 0) - (h.custB.get(x) || 0);
+  });
+  const rows = keys.map(c => {
+    const va = h.custA.get(c) || 0, vb = h.custB.get(c) || 0, d = vb - va;
+    const cl = d > 0 ? 'up' : d < 0 ? 'down' : 'zero';
+    return `<tr><td class="bc">${codeChip(c)}</td><td>${esc(cust(c))}</td>
+      <td class="num dim">${va ? shares(va) : '\u2014'}</td>
+      <td class="num">${vb ? shares(vb) : '\u2014'}</td>
+      <td class="num ${cl}">${d === 0 ? '\u2014' : signed(d)}</td></tr>`;
+  }).join('');
+  return `<div class="custwrap"><h4>Securities accounts holding this stake</h4>
+    <table class="cust"><thead><tr><th>Code</th><th>Custodian or broker</th>
+      <th class="num">${dateLabel(DATA.dates[state.from])}</th>
+      <th class="num">${dateLabel(DATA.dates[state.to])}</th>
+      <th class="num">Change</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function table(cols, items, rowFn) {
+  const head = cols.map(c => {
+    const caret = state.sort === c.key ? `<span class="caret">${state.desc ? '\u25BC' : '\u25B2'}</span>` : '';
+    const attr = c.sort ? ` data-sort="${c.key}" tabindex="0" role="button"` : '';
+    return `<th class="${c.num ? 'num' : ''}${c.sort ? ' sortable' : ''}"${attr}>${c.label}${caret}</th>`;
+  }).join('');
+  const body = items.length ? items.map((h, i) => {
+    const id = h.iss + ':' + h.inv;
+    const open = state.open.has(id);
+    return `<tr class="row${open ? ' open' : ''}" data-row="${id}">${rowFn(h, open)}</tr>`
+      + (open ? `<tr class="detail"><td colspan="${cols.length}">${custodianDetail(h)}</td></tr>` : '');
+  }).join('')
+   : `<tr><td colspan="${cols.length}"><div class="empty"><b>Nothing moved</b>No 5% holding changed between these two dates.</div></td></tr>`;
+  return `<div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function applySort(arr) {
+  if (!state.sort) return arr;
+  const val = h => state.sort === 'code' ? code(h.iss)
+              : state.sort === 'owner' ? owner(h.inv) : (h[state.sort] ?? -Infinity);
+  return arr.slice().sort((a, b) => {
+    const x = val(a), y = val(b);
+    const c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+    return state.desc ? -c : c;
+  });
+}
+
+/* ---------------- CSV ---------------- */
+let lastRows = [], lastName = 'changes';
+function download() {
+  const a = DATA.dates[state.from], b = DATA.dates[state.to];
+  const head = ['emiten', 'issuer_name', 'investor', 'local_foreign', 'domicile',
+    'shares_' + a, 'shares_' + b, 'delta_shares', 'pct_' + a, 'pct_' + b, 'delta_pp',
+    'status', 'brokers_moved', 'offset_by'];
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = lastRows.map(h => [
+    code(h.iss), iname(h.iss), owner(h.inv), ['L','F','-'][h.lf], h.dom,
+    h.sa, h.sb, h.ds, (h.ba/100).toFixed(2), (h.bb/100).toFixed(2), (h.db/100).toFixed(2),
+    h.status, h.moved.map(m => (bcode(m.c) ? bcode(m.c) + ' ' : '') + cust(m.c)).join(' | '),
+    h.offset !== undefined ? owner(h.offset) : ''
+  ].map(q).join(','));
+  const blob = new Blob([head.join(',') + '\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const el = document.createElement('a');
+  el.href = URL.createObjectURL(blob);
+  el.download = `5persen_${lastName}_${a}_to_${b}.csv`;
+  el.click(); URL.revokeObjectURL(el.href);
+}
+
+/* ---------------- views ---------------- */
+function viewChanges(d) {
+  let rows = d.list;
+  if (state.filter !== 'all') rows = rows.filter(h => h.status === state.filter);
+  rows = state.sort ? applySort(rows)
+       : rows.slice().sort((a, b) => Math.abs(b.db) - Math.abs(a.db) || Math.abs(b.ds) - Math.abs(a.ds));
+  lastRows = rows; lastName = 'changes';
+
+  const c = { up: 0, down: 0, in: 0, out: 0, shuffle: 0 };
+  for (const h of d.list) c[h.status]++;
+  const total = posByDate[state.to].size;
+
+  const cols = [
+    { key: 'disc', label: '' },
+    { key: 'code', label: 'Emiten', sort: 1 },
+    { key: 'owner', label: 'Owner', sort: 1 },
+    { key: 'sa', label: 'Shares before', num: 1, sort: 1 },
+    { key: 'sb', label: 'Shares after', num: 1, sort: 1 },
+    { key: 'ds', label: 'Change', num: 1, sort: 1 },
+    { key: 'bb', label: 'Stake after', num: 1, sort: 1 },
+    { key: 'db', label: 'Change (pp)', num: 1, sort: 1 },
+    { key: 'moved', label: 'Where it moved' },
+    { key: 'status', label: '' }
+  ];
+
+  const rowFn = (h, open) => `
+    <td><button class="disc" aria-label="Show accounts">${open ? '\u25BC' : '\u25B6'}</button></td>
+    <td><button class="link ticker" data-go="i" data-id="${h.iss}">${esc(code(h.iss))}</button></td>
+    <td class="name"><button class="link" data-go="o" data-id="${h.inv}">${esc(owner(h.inv))}</button></td>
+    <td class="num dim">${h.sa ? shares(h.sa) : '\u2014'}</td>
+    <td class="num">${h.sb ? shares(h.sb) : '\u2014'}</td>
+    <td class="num">${dShares(h)}</td>
+    <td class="num">${h.bb ? pct(h.bb) : '\u2014'}</td>
+    <td class="num">${dPp(h)}</td>
+    <td class="dim">${h.moved.length
+      ? codeChip(h.moved[0].c) + ' ' + esc(cust(h.moved[0].c)) + (h.moved.length > 1 ? ` +${h.moved.length - 1}` : '')
+      : '\u2014'}</td>
+    <td>${statusTag(h)}</td>`;
+
+  const lede = `<p class="lede">On <b>${dateLabel(DATA.dates[state.to])}</b>,
+    ${nf.format(d.list.length)} of ${nf.format(total)} disclosed 5% positions changed
+    ${state.to - state.from === 1 ? 'from the day before' : `since ${dateLabel(DATA.dates[state.from])}`}.
+    <span class="g">${c.up} added</span> and <span class="r">${c.down} reduced</span>;
+    ${c.in} crossed above 5% and ${c.out} fell below.
+    ${c.shuffle ? `${c.shuffle} kept the same stake but moved it between brokers.` : ''}</p>`;
+
+  const controls = `<div class="controls">
+    <div class="seg" role="group" aria-label="Change type">
+      ${[['all','All'],['up','Added'],['down','Reduced'],['in','Crossed 5%'],['out','Below 5%'],['shuffle','Moved broker']]
+        .map(([k,l]) => `<button data-filter="${k}" aria-pressed="${state.filter===k}">${l}</button>`).join('')}
+    </div>
+    <label class="inline">Sort by
+      <select id="order">
+        <option value="code"${state.sort === 'code' ? ' selected' : ''}>emiten (A\u2013Z)</option>
+        <option value="impact"${state.sort === null ? ' selected' : ''}>biggest change</option>
+      </select>
+    </label>
+    <span class="spacer"></span>
+    <span class="dim">${nf.format(rows.length)} rows</span>
+    <button class="ghost" id="csv">Download CSV</button>
+  </div>`;
+
+  return lede + `<div class="panel">${controls}${table(cols, rows, rowFn)}</div>`;
+}
+
+function viewIssuer(d) {
+  if (state.issuer === null) return `<div class="panel"><div class="empty"><b>Pick an emiten</b>Search a ticker above to see every holder above 5% and what they did.</div></div>`;
+  const i = state.issuer;
+
+  // Every 5% holder of this emiten, changed or not.
+  const keys = new Set();
+  for (const m of [posByDate[state.from], posByDate[state.to]])
+    for (const [k, r] of m) if (r[0] === i) keys.add(k);
+  const moved = new Map((d.byIssuer.get(i) || []).map(h => [h.iss + ':' + h.inv, h]));
+
+  let rows = [...keys].map(k => moved.get(k) || (() => {
+    const r = posByDate[state.to].get(k) || posByDate[state.from].get(k);
+    const ca = accByDate[state.from].get(k) || new Map();
+    const cb = accByDate[state.to].get(k) || new Map();
+    const ra = posByDate[state.from].get(k), rb = posByDate[state.to].get(k);
+    return { iss: r[0], inv: r[1], lf: r[5], dom: r[6], recA: ra?ra[4]:0, recB: rb?rb[4]:0,
+             sa: ra?ra[2]:0, sb: rb?rb[2]:0, ba: ra?ra[3]:0, bb: rb?rb[3]:0,
+             ds: 0, db: (rb?rb[3]:0)-(ra?ra[3]:0), moved: [], custA: ca, custB: cb, status: 'flat' };
+  })());
+  rows = state.sort && state.sort !== 'code'
+    ? applySort(rows)
+    : rows.slice().sort((a, b) => b.bb - a.bb || b.ba - a.ba);
+  lastRows = rows; lastName = code(i);
+
+  const held = rows.reduce((s, h) => s + h.bb, 0);
+  const heldWas = rows.reduce((s, h) => s + h.ba, 0);
+  const foreign = rows.filter(h => h.lf === 1).reduce((s, h) => s + h.bb, 0);
+  const changed = rows.filter(h => h.status !== 'flat').length;
+
+  const cols = [
+    { key: 'disc', label: '' },
+    { key: 'owner', label: 'Owner', sort: 1 },
+    { key: 'lf', label: '' },
+    { key: 'sa', label: 'Shares before', num: 1, sort: 1 },
+    { key: 'sb', label: 'Shares after', num: 1, sort: 1 },
+    { key: 'ds', label: 'Change', num: 1, sort: 1 },
+    { key: 'ba', label: 'Stake before', num: 1, sort: 1 },
+    { key: 'bb', label: 'Stake after', num: 1, sort: 1 },
+    { key: 'db', label: 'Change (pp)', num: 1, sort: 1 },
+    { key: 'status', label: '' }
+  ];
+  const rowFn = (h, open) => `
+    <td><button class="disc" aria-label="Show accounts">${open ? '\u25BC' : '\u25B6'}</button></td>
+    <td class="name"><button class="link" data-go="o" data-id="${h.inv}">${esc(owner(h.inv))}</button></td>
+    <td>${lfTag(h.lf)}</td>
+    <td class="num dim">${h.sa ? shares(h.sa) : '\u2014'}</td>
+    <td class="num">${h.sb ? shares(h.sb) : '\u2014'}</td>
+    <td class="num">${h.status === 'flat' ? '<span class="zero">\u2014</span>' : dShares(h)}</td>
+    <td class="num dim">${h.ba ? pct(h.ba) : '\u2014'}</td>
+    <td class="num">${h.bb ? pct(h.bb) : '\u2014'}</td>
+    <td class="num">${dPp(h)}</td>
+    <td>${h.status === 'flat' ? '<span class="tag l">unchanged</span>' : statusTag(h)}</td>`;
+
+  const delta = (now, was) => {
+    const dv = now - was, c = dv > 0 ? 'up' : dv < 0 ? 'down' : 'zero';
+    return `<span class="${c}" style="font-size:13px;font-weight:500"> ${dv === 0 ? '' : pp(dv) + ' pp'}</span>`;
+  };
+
+  return `<div class="panel">
+    <div class="panel-head"><h2>${esc(code(i))} &middot; ${esc(iname(i))}</h2>
+      <div class="sub">${dateLabel(DATA.dates[state.from])} &rarr; ${dateLabel(DATA.dates[state.to])}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">Holders above 5%</div><div class="v">${rows.filter(h => h.sb > 0).length}</div></div>
+      <div class="stat"><div class="k">Positions that moved</div><div class="v">${changed}</div></div>
+      <div class="stat"><div class="k">Disclosed above 5%</div><div class="v">${pct(held)}${delta(held, heldWas)}</div></div>
+      <div class="stat"><div class="k">Held by foreign owners</div><div class="v">${pct(foreign)}</div></div>
+    </div>
+    <div class="controls"><span class="spacer"></span><button class="ghost" id="csv">Download CSV</button></div>
+    ${table(cols, rows, rowFn)}</div>`;
+}
+
+function viewOwner(d) {
+  if (state.ownerId === null) return `<div class="panel"><div class="empty"><b>Pick an owner</b>Search an investor above to see every emiten where they hold 5% or more.</div></div>`;
+  const o = state.ownerId;
+  const keys = new Set();
+  for (const m of [posByDate[state.from], posByDate[state.to]])
+    for (const [k, r] of m) if (r[1] === o) keys.add(k);
+  const moved = new Map((d.byOwner.get(o) || []).map(h => [h.iss + ':' + h.inv, h]));
+
+  let rows = [...keys].map(k => moved.get(k) || (() => {
+    const ra = posByDate[state.from].get(k), rb = posByDate[state.to].get(k);
+    const r = rb || ra;
+    return { iss: r[0], inv: r[1], lf: r[5], dom: r[6], recA: ra?ra[4]:0, recB: rb?rb[4]:0,
+             sa: ra?ra[2]:0, sb: rb?rb[2]:0, ba: ra?ra[3]:0, bb: rb?rb[3]:0, ds: 0,
+             db: (rb?rb[3]:0)-(ra?ra[3]:0), moved: [],
+             custA: accByDate[state.from].get(k) || new Map(),
+             custB: accByDate[state.to].get(k) || new Map(), status: 'flat' };
+  })());
+  rows = state.sort ? applySort(rows) : rows.slice().sort((a, b) => Math.abs(b.db) - Math.abs(a.db) || b.bb - a.bb);
+  lastRows = rows; lastName = owner(o).replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40);
+  const ref = rows[0];
+
+  const cols = [
+    { key: 'disc', label: '' },
+    { key: 'code', label: 'Emiten', sort: 1 },
+    { key: 'iss', label: 'Company' },
+    { key: 'sa', label: 'Shares before', num: 1, sort: 1 },
+    { key: 'sb', label: 'Shares after', num: 1, sort: 1 },
+    { key: 'ds', label: 'Change', num: 1, sort: 1 },
+    { key: 'ba', label: 'Stake before', num: 1, sort: 1 },
+    { key: 'bb', label: 'Stake after', num: 1, sort: 1 },
+    { key: 'db', label: 'Change (pp)', num: 1, sort: 1 },
+    { key: 'status', label: '' }
+  ];
+  const rowFn = (h, open) => `
+    <td><button class="disc" aria-label="Show accounts">${open ? '\u25BC' : '\u25B6'}</button></td>
+    <td><button class="link ticker" data-go="i" data-id="${h.iss}">${esc(code(h.iss))}</button></td>
+    <td class="name dim">${esc(iname(h.iss))}</td>
+    <td class="num dim">${h.sa ? shares(h.sa) : '\u2014'}</td>
+    <td class="num">${h.sb ? shares(h.sb) : '\u2014'}</td>
+    <td class="num">${h.status === 'flat' ? '<span class="zero">\u2014</span>' : dShares(h)}</td>
+    <td class="num dim">${h.ba ? pct(h.ba) : '\u2014'}</td>
+    <td class="num">${h.bb ? pct(h.bb) : '\u2014'}</td>
+    <td class="num">${dPp(h)}</td>
+    <td>${h.status === 'flat' ? '<span class="tag l">unchanged</span>' : statusTag(h)}</td>`;
+
+  return `<div class="panel">
+    <div class="panel-head"><h2>${esc(owner(o))}</h2>
+      <div class="sub">${['Local','Foreign','Unclassified'][ref.lf]}${ref.dom ? ' &middot; ' + esc(ref.dom) : ''}</div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">Positions above 5%</div><div class="v">${rows.filter(h => h.sb > 0).length}</div></div>
+      <div class="stat"><div class="k">Added or entered</div><div class="v up">${rows.filter(h => h.status === 'up' || h.status === 'in').length}</div></div>
+      <div class="stat"><div class="k">Trimmed or exited</div><div class="v down">${rows.filter(h => h.status === 'down' || h.status === 'out').length}</div></div>
+    </div>
+    <div class="controls"><span class="spacer"></span><button class="ghost" id="csv">Download CSV</button></div>
+    ${table(cols, rows, rowFn)}</div>`;
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  $('#from').value = state.from; $('#to').value = state.to;
+  document.querySelectorAll('nav.tabs button').forEach(b =>
+    b.setAttribute('aria-selected', b.dataset.view === state.view));
+  const main = $('#main');
+
+  if (state.from === state.to) {
+    main.innerHTML = `<div class="panel"><div class="empty"><b>Pick two different dates</b>Comparing a day against itself has nothing to show.</div></div>`;
+    return;
+  }
+  const a = Math.min(state.from, state.to), b = Math.max(state.from, state.to);
+  const d = buildDiff(a, b);
+
+  main.innerHTML = state.view === 'changes' ? viewChanges(d)
+                 : state.view === 'issuer' ? viewIssuer(d) : viewOwner(d);
+
+  main.querySelectorAll('[data-filter]').forEach(el =>
+    el.onclick = () => { state.filter = el.dataset.filter; render(); });
+  const order = main.querySelector('#order');
+  if (order) order.onchange = e => {
+    state.sort = e.target.value === 'code' ? 'code' : null;
+    state.desc = false;
+    render();
+  };
+  const csv = main.querySelector('#csv'); if (csv) csv.onclick = download;
+
+  main.querySelectorAll('th[data-sort]').forEach(th => {
+    const act = () => {
+      const k = th.dataset.sort;
+      if (state.sort === k) state.desc = !state.desc;
+      else { state.sort = k; state.desc = !['code', 'owner'].includes(k); }
+      render();
+    };
+    th.onclick = act;
+    th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } };
+  });
+
+  main.querySelectorAll('tr.row').forEach(tr => {
+    tr.onclick = e => {
+      if (e.target.closest('[data-go]')) return;
+      const id = tr.dataset.row;
+      state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+      render();
+    };
+  });
+  main.querySelectorAll('[data-go]').forEach(el =>
+    el.onclick = e => { e.stopPropagation(); go(el.dataset.go === 'i' ? 'issuer' : 'owner', +el.dataset.id); });
+}
+
+/* ---------------- loading ---------------- */
+const FILES = ['positions.csv', 'accounts.csv', 'meta.csv'];
+// The csv folder is the normal layout, but downloading the files one by one
+// flattens them next to index.html, so try both before giving up.
+const BASES = ['csv/', ''];
+
+async function fetchText(base, name) {
+  const r = await fetch(base + name);
+  if (!r.ok) throw new Error(`${base}${name} \u2014 ${r.status}`);
+  return r.text();
+}
+
+async function locate() {
+  const tried = [];
+  for (const base of BASES) {
+    try {
+      const positions = await fetchText(base, 'positions.csv');
+      return { base, positions };
+    } catch (err) { tried.push(err.message); }
+  }
+  throw new Error(tried.join('; '));
+}
+
+function status(html) { $('#main').innerHTML = `<div class="panel"><div class="empty">${html}</div></div>`; }
+
+function start(positions, accounts, metaRows) {
+  const meta = Object.fromEntries((metaRows || []).map(r => [r.key, r.value]));
+  DATA = assemble(positions, accounts, meta);
+  if (!DATA.dates.length) { status('<b>No rows in positions.csv</b>Run build_five.py first.'); return; }
+  if (DATA.dates.length < 2) {
+    status('<b>Only one date in the data</b>A change needs two. Add another KSEI file to data/ and re-run build_five.py.');
+    return;
+  }
+  buildIndexes();
+  state.to = DATA.dates.length - 1;
+  state.from = state.to - 1;
+  initDates(); initSearch();
+  document.querySelectorAll('nav.tabs button').forEach(b =>
+    b.onclick = () => { state.view = b.dataset.view; state.sort = 'code'; state.desc = false; state.open.clear(); render(); });
+  window.addEventListener('hashchange', () => { readHash(); render(); });
+  readHash(); render();
+}
+
+function offerPicker(why) {
+  status(`<b>Load the csv folder</b>${why}<br><br>
+    <input type="file" id="pick" multiple accept=".csv" webkitdirectory directory>
+    <div style="margin-top:14px;font-size:12.5px;max-width:56ch;margin-left:auto;margin-right:auto">
+      Pick the folder holding <code>positions.csv</code> and <code>accounts.csv</code> &mdash;
+      either the <code>csv</code> folder or, if you downloaded the files singly, whichever
+      folder they landed in. They are read in your browser and go nowhere else.
+      To skip this step, run <code>python3 serve.py</code> from that folder.
+    </div>`);
+  $('#pick').onchange = async e => {
+    const picked = [...e.target.files];
+    const grab = name => picked.find(f => f.name === name);
+    const missing = FILES.slice(0, 2).filter(n => !grab(n));
+    if (missing.length) { offerPicker(`Could not see ${missing.join(' and ')} in that folder.`); return; }
+    status('<b>Reading\u2026</b>');
+    const read = async name => { const f = grab(name); return f ? parseCSV(await f.text()) : []; };
+    start(await read('positions.csv'), await read('accounts.csv'), await read('meta.csv'));
+  };
+}
+
+(async () => {
+  status('<b>Loading\u2026</b>');
+  try {
+    const { base, positions } = await locate();
+    const acc = await fetchText(base, 'accounts.csv');
+    // meta.csv only carries notes about the run; the page works without it.
+    const meta = await fetchText(base, 'meta.csv').catch(() => '');
+    start(parseCSV(positions), parseCSV(acc), parseCSV(meta));
+  } catch (err) {
+    // file:// blocks fetch, so fall back to reading the folder locally.
+    offerPicker(location.protocol === 'file:'
+      ? 'Opening this page straight off disk stops the browser reading the CSVs on its own.'
+      : `Could not find positions.csv, either in <code>csv/</code> or next to this page.`
+        + `<br><span style="font-size:12.5px">${esc(String(err.message || err))}</span>`);
+  }
+})();
+</script>
+</body>
+</html>
